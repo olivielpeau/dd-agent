@@ -1,4 +1,8 @@
 #!/bin/sh
+# (C) Datadog, Inc. 2010-2016
+# All rights reserved
+# Licensed under Simplified BSD License (see LICENSE)
+
 
 # figure out where to pull from
 tag="5.6.3"
