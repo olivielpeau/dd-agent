@@ -8,11 +8,12 @@ import unittest
 from utils.service_discovery.config_stores import get_config_store
 from utils.service_discovery.consul_config_store import ConsulStore
 from utils.service_discovery.etcd_config_store import EtcdStore
+from utils.service_discovery.abstract_config_store import AbstractConfigStore
 from utils.service_discovery.sd_backend import ServiceDiscoveryBackend, SDDockerBackend
 
 
-def clear_singletons(sd_backend):
-    ConfigStore._drop()
+def clear_singletons(sd_backend, agentConfig):
+    get_config_store(agentConfig)._drop()
     ServiceDiscoveryBackend._drop()
 
 
@@ -33,7 +34,7 @@ def _get_container_inspect(c_id):
         return None
 
 
-def _get_tpl_conf(image_name):
+def _get_tpl_conf(image_name, trace_config=False):
     """Return a mocked configuration template from self.mock_templates."""
     tpl_conf = copy.deepcopy(TestServiceDiscovery.mock_templates.get(image_name)[0])
     return tpl_conf
@@ -143,15 +144,15 @@ class TestServiceDiscovery(unittest.TestCase):
         mock_get.return_value = Response(pod_list)
 
         for c_ins, expected_ip, _ in self.container_inspects:
-            with mock.patch.object(ConfigStore, '__init__', return_value=None):
-                with mock.patch('utils.service_discovery.sd_backend.get_docker_client', return_value=None):
+            with mock.patch.object(AbstractConfigStore, '__init__', return_value=None):
+                with mock.patch('utils.dockerutil.DockerUtil.client', return_value=None):
                     with mock.patch('utils.service_discovery.sd_backend.get_conf_path', return_value=None):
                         sd_backend = ServiceDiscoveryBackend(agentConfig=self.auto_conf_agentConfig)
                         self.assertEqual(sd_backend._get_host(c_ins), expected_ip)
-                        clear_singletons(sd_backend)
+                        clear_singletons(sd_backend, self.auto_conf_agentConfig)
 
     def test_get_ports(self):
-        with mock.patch('utils.service_discovery.sd_backend.get_docker_client', return_value=None):
+        with mock.patch('utils.dockerutil.DockerUtil.client', return_value=None):
             for c_ins, _, expected_ports in self.container_inspects:
                 sd_backend = ServiceDiscoveryBackend(agentConfig=self.auto_conf_agentConfig)
                 if isinstance(expected_ports, list):
@@ -159,7 +160,7 @@ class TestServiceDiscovery(unittest.TestCase):
                 else:
                     with self.assertRaises(expected_ports):
                         sd_backend._get_ports(c_ins)
-                clear_singletons(sd_backend)
+                clear_singletons(sd_backend, self.auto_conf_agentConfig)
 
     @mock.patch('docker.Client.inspect_container', side_effect=_get_container_inspect)
     @mock.patch.object(SDDockerBackend, '_get_template_config', side_effect=_get_tpl_conf)
@@ -174,7 +175,7 @@ class TestServiceDiscovery(unittest.TestCase):
                         sd_backend._get_check_config(c_id, image),
                         self.mock_templates[image][1])
 
-    @mock.patch.object(ConfigStore, 'get_check_tpl', side_effect=_get_check_tpl)
+    @mock.patch.object(AbstractConfigStore, 'get_check_tpl', side_effect=_get_check_tpl)
     def test_get_template_config(self, mock_get_check_tpl):
         """Test _get_template_config with mocked get_check_tpl"""
         with mock.patch.object(EtcdStore, 'get_client', return_value=None):
@@ -196,7 +197,6 @@ class TestServiceDiscovery(unittest.TestCase):
         """Test _get_auto_config"""
         expected_tpl = {
             'redis': ('redisdb', '{}', '{"host": "%%host%%", "port": "%%port%%"}'),
-            'nginx': ('nginx', '{}', '{"nginx_status_url": "http://%%host%%/nginx_status/"}'),
             'consul': ('consul', '{}', '{"url": "http://%%host%%:%%port%%", "catalog_checks": true, "service_whitelist": null, "new_leader_checks": true}'),
             'foobar': None
         }
@@ -206,7 +206,7 @@ class TestServiceDiscovery(unittest.TestCase):
             config = config_store._get_auto_config(image)
             self.assertEquals(config, expected_tpl.get(image))
 
-    @mock.patch.object(ConfigStore, 'client_read', side_effect=client_read)
+    @mock.patch.object(AbstractConfigStore, 'client_read', side_effect=client_read)
     def test_get_check_tpl(self, mock_client_read):
         """Test get_check_tpl"""
         valid_config = ['image_0', 'image_1', 'image_2']
