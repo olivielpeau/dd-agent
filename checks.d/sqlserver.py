@@ -280,7 +280,7 @@ class SQLServer(AgentCheck):
         """
         Fetch the metrics from the sys.dm_os_performance_counters table
         """
-        self.open_db_connections()
+        self.open_db_connections(instance)
         cursor = self.get_cursor(instance)
 
         custom_tags = instance.get('tags', [])
@@ -319,7 +319,7 @@ class SQLServer(AgentCheck):
             except Exception as e:
                 self.log.warning("Could not close adodbapi db connection\n{0}".format(e))
 
-    def open_db_connections(self):
+    def open_db_connections(self, instance):
         """
         We open the db connections explicitly, so we can ensure they are open
         before we use them, and are closable, once we are finished. Open db
@@ -329,7 +329,8 @@ class SQLServer(AgentCheck):
         for conn_key, connection in self.connections.iteritems():
             conn = connection['conn']
             timeout = connection['timeout']
-            conn_dict = {'connection_string': self._conn_string(conn_key=conn_key),
+
+            conn_dict = {'connection_string': self._conn_string(instance=instance),
                          'timeout': timeout}
             try:
                 conn.connect(conn_dict)
