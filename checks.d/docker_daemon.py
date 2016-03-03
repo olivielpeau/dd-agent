@@ -224,15 +224,15 @@ class DockerDaemon(AgentCheck):
         containers_by_id = self._get_and_count_containers()
         containers_by_id = self._crawl_container_pids(containers_by_id)
 
+        # Send events from Docker API
+        if self.collect_events or self._service_discovery:
+            self._process_events(containers_by_id)
+
         # Report performance container metrics (cpu, mem, net, io)
         self._report_performance_metrics(containers_by_id)
 
         if self.collect_container_size:
             self._report_container_size(containers_by_id)
-
-        # Send events from Docker API
-        if self.collect_events or self._service_discovery:
-            self._process_events(containers_by_id)
 
     def _count_and_weigh_images(self):
         try:
