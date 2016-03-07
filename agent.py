@@ -187,10 +187,11 @@ class Agent(Daemon):
             self.configs_reloaded = False
 
             # Look for change in the config template store to trigger a config reload
-            if self._agentConfig.get('service_discovery') is True and \
-               self._agentConfig.get('reload_check_configs') is False:
+            if self._agentConfig.get('service_discovery') and \
+               not self._agentConfig.get('reload_check_configs'):
                 try:
-                    self._agentConfig['reload_check_configs'] = get_config_store(self._agentConfig).crawl_config_template()
+                    self._agentConfig['reload_check_configs'] = get_config_store(
+                        self._agentConfig).crawl_config_template()
                 except Exception as e:
                     log.warn('Something went wrong while looking for config template changes: %s' % str(e))
 

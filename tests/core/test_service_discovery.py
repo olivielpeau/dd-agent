@@ -9,12 +9,13 @@ from utils.service_discovery.config_stores import get_config_store
 from utils.service_discovery.consul_config_store import ConsulStore
 from utils.service_discovery.etcd_config_store import EtcdStore
 from utils.service_discovery.abstract_config_store import AbstractConfigStore
-from utils.service_discovery.sd_backend import ServiceDiscoveryBackend, SDDockerBackend
+from utils.service_discovery.sd_backend import get_sd_backend
+from utils.service_discovery.sd_docker_backend import SDDockerBackend
 
 
 def clear_singletons(sd_backend, agentConfig):
     get_config_store(agentConfig)._drop()
-    ServiceDiscoveryBackend._drop()
+    get_sd_backend(agentConfig)._drop()
 
 
 class Response(object):
@@ -126,7 +127,7 @@ class TestServiceDiscovery(unittest.TestCase):
     # sd_backend tests
 
     @mock.patch('requests.get')
-    @mock.patch('utils.service_discovery.sd_backend.check_yaml')
+    @mock.patch('utils.service_discovery.sd_docker_backend.check_yaml')
     def test_get_host(self, mock_check_yaml, mock_get):
         kubernetes_config = {'instances': [{'kubelet_port': 1337}]}
         pod_list = {
@@ -146,15 +147,15 @@ class TestServiceDiscovery(unittest.TestCase):
         for c_ins, expected_ip, _ in self.container_inspects:
             with mock.patch.object(AbstractConfigStore, '__init__', return_value=None):
                 with mock.patch('utils.dockerutil.DockerUtil.client', return_value=None):
-                    with mock.patch('utils.service_discovery.sd_backend.get_conf_path', return_value=None):
-                        sd_backend = ServiceDiscoveryBackend(agentConfig=self.auto_conf_agentConfig)
+                    with mock.patch('utils.service_discovery.sd_docker_backend.get_conf_path', return_value=None):
+                        sd_backend = get_sd_backend(agentConfig=self.auto_conf_agentConfig)
                         self.assertEqual(sd_backend._get_host(c_ins), expected_ip)
                         clear_singletons(sd_backend, self.auto_conf_agentConfig)
 
     def test_get_ports(self):
         with mock.patch('utils.dockerutil.DockerUtil.client', return_value=None):
             for c_ins, _, expected_ports in self.container_inspects:
-                sd_backend = ServiceDiscoveryBackend(agentConfig=self.auto_conf_agentConfig)
+                sd_backend = get_sd_backend(agentConfig=self.auto_conf_agentConfig)
                 if isinstance(expected_ports, list):
                     self.assertEqual(sd_backend._get_ports(c_ins), expected_ports)
                 else:
@@ -170,7 +171,7 @@ class TestServiceDiscovery(unittest.TestCase):
             with mock.patch.object(SDDockerBackend, '_get_ports', return_value=['1337']):
                 c_id = self.docker_container_inspect.get('Id')
                 for image in self.mock_templates.keys():
-                    sd_backend = ServiceDiscoveryBackend(agentConfig=self.auto_conf_agentConfig)
+                    sd_backend = get_sd_backend(agentConfig=self.auto_conf_agentConfig)
                     self.assertEquals(
                         sd_backend._get_check_config(c_id, image),
                         self.mock_templates[image][1])
@@ -181,7 +182,7 @@ class TestServiceDiscovery(unittest.TestCase):
         with mock.patch.object(EtcdStore, 'get_client', return_value=None):
             with mock.patch.object(ConsulStore, 'get_client', return_value=None):
                 for agentConfig in self.agentConfigs:
-                    sd_backend = ServiceDiscoveryBackend(agentConfig=agentConfig)
+                    sd_backend = get_sd_backend(agentConfig=agentConfig)
                     # normal cases
                     for image in self.mock_templates.keys():
                         template = sd_backend._get_template_config(image)

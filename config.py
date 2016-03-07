@@ -30,7 +30,7 @@ from utils.subprocess_output import (
     SubprocessOutputEmptyError,
 )
 from utils.service_discovery.abstract_config_store import AbstractConfigStore
-
+from utils.service_discovery.sd_backend import get_sd_backend
 
 # CONSTANTS
 AGENT_VERSION = "5.7.0"
@@ -785,6 +785,7 @@ def check_yaml(conf_path):
         else:
             return check_config
 
+
 def get_checks_paths(agentConfig, osname):
     '''Return the checks paths.'''
     checks_paths = [glob.glob(os.path.join(agentConfig['additional_checksd'], '*.py'))]
@@ -860,8 +861,7 @@ def load_check_directory(agentConfig, hostname):
         sys.exit(3)
 
     if agentConfig.get('service_discovery') and agentConfig.get('service_discovery_backend') in SD_BACKENDS:
-        from utils.service_discovery.sd_backend import ServiceDiscoveryBackend
-        sd_backend = ServiceDiscoveryBackend(agentConfig=agentConfig)
+        sd_backend = get_sd_backend(agentConfig=agentConfig)
         service_disco_configs = sd_backend.get_configs()
     else:
         service_disco_configs = {}
