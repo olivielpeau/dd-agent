@@ -3,7 +3,8 @@ import os
 import random
 
 # project
-from config import check_yaml, get_confd_path
+from config import get_confd_path
+from util import check_yaml
 from utils.singleton import Singleton
 
 

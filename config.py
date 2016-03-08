@@ -18,11 +18,8 @@ import sys
 import traceback
 from urlparse import urlparse
 
-# 3p
-import yaml
-
 # project
-from util import get_os, yLoader
+from util import check_yaml, get_os
 from utils.platform import Platform
 from utils.proxy import get_proxy
 from utils.subprocess_output import (
@@ -764,26 +761,6 @@ def get_ssl_certificate(osname, filename):
 
     log.info("Certificate file NOT found at %s" % str(path))
     return None
-
-
-def check_yaml(conf_path):
-    with open(conf_path) as f:
-        check_config = yaml.load(f.read(), Loader=yLoader)
-        assert 'init_config' in check_config, "No 'init_config' section found"
-        assert 'instances' in check_config, "No 'instances' section found"
-
-        valid_instances = True
-        if check_config['instances'] is None or not isinstance(check_config['instances'], list):
-            valid_instances = False
-        else:
-            for i in check_config['instances']:
-                if not isinstance(i, dict):
-                    valid_instances = False
-                    break
-        if not valid_instances:
-            raise Exception('You need to have at least one instance defined in the YAML file for this check')
-        else:
-            return check_config
 
 
 def get_checks_paths(agentConfig, osname):

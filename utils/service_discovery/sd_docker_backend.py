@@ -5,7 +5,7 @@ import requests
 import simplejson as json
 
 # project
-from config import check_yaml
+from util import check_yaml
 from utils.checkfiles import get_conf_path
 from utils.dockerutil import DockerUtil
 from utils.kubeutil import _get_default_router, DEFAULT_KUBELET_PORT

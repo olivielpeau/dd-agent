@@ -91,6 +91,7 @@ def headers(agentConfig):
         'Accept': 'text/html, */*',
     }
 
+
 def windows_friendly_colon_split(config_string):
     '''
     Perform a split by ':' on the config_string
@@ -101,6 +102,7 @@ def windows_friendly_colon_split(config_string):
         return COLON_NON_WIN_PATH.split(config_string)
     else:
         return config_string.split(':')
+
 
 def getTopIndex():
     macV = None
@@ -139,12 +141,15 @@ def cast_metric_val(val):
     return val
 
 _IDS = {}
+
+
 def get_next_id(name):
     global _IDS
     current_id = _IDS.get(name, 0)
     current_id += 1
     _IDS[name] = current_id
     return current_id
+
 
 def is_valid_hostname(hostname):
     if hostname.lower() in set([
@@ -162,6 +167,26 @@ def is_valid_hostname(hostname):
         log.warning("Hostname: %s is not complying with RFC 1123" % hostname)
         return False
     return True
+
+
+def check_yaml(conf_path):
+    with open(conf_path) as f:
+        check_config = yaml.load(f.read(), Loader=yLoader)
+        assert 'init_config' in check_config, "No 'init_config' section found"
+        assert 'instances' in check_config, "No 'instances' section found"
+
+        valid_instances = True
+        if check_config['instances'] is None or not isinstance(check_config['instances'], list):
+            valid_instances = False
+        else:
+            for i in check_config['instances']:
+                if not isinstance(i, dict):
+                    valid_instances = False
+                    break
+        if not valid_instances:
+            raise Exception('You need to have at least one instance defined in the YAML file for this check')
+        else:
+            return check_config
 
 
 def get_hostname(config=None):

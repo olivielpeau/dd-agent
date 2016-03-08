@@ -7,7 +7,6 @@ from docker import Client
 from docker import tls
 
 # project
-from utils.checkfiles import get_conf_path
 from utils.singleton import Singleton
 
 
@@ -32,7 +31,8 @@ class DockerUtil():
         self._docker_root = None
 
         # Read the config from docker_daemon.yaml
-        from config import check_yaml
+        from util import check_yaml
+        from utils.checkfiles import get_conf_path
         conf_path = get_conf_path(CHECK_NAME)
 
         if conf_path is not None and os.path.exists(conf_path):

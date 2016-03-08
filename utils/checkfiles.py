@@ -5,6 +5,9 @@ import logging
 import os
 from urlparse import urljoin
 
+# project
+from util import check_yaml
+
 log = logging.getLogger(__name__)
 
 
@@ -49,7 +52,7 @@ def get_check_class(agentConfig, check_name):
 
 def get_auto_conf(agentConfig, check_name):
     """Return the yaml auto_config dict for a check name (None if it doesn't exist)."""
-    from config import check_yaml, PathNotFound, get_auto_confd_path
+    from config import PathNotFound, get_auto_confd_path
 
     try:
         auto_confd_path = get_auto_confd_path()
@@ -74,7 +77,7 @@ def get_auto_conf(agentConfig, check_name):
 
 def get_auto_conf_images(agentConfig):
     """Walk through the auto_config folder and build a dict of auto-configurable images."""
-    from config import check_yaml, PathNotFound, get_auto_confd_path
+    from config import PathNotFound, get_auto_confd_path
     auto_conf_images = {
         # image_name: check_name
     }
