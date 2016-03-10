@@ -66,7 +66,7 @@ def load_check(name, config, agentConfig, is_sdk=None):
         check_module = __import__(name)
 
     else:
-        check_module = __import__("check.py")
+        check_module = __import__("check")
 
     check_class = None
     classes = inspect.getmembers(check_module, inspect.isclass)
