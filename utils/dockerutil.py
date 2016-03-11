@@ -1,6 +1,7 @@
 # stdlib
 import logging
 import os
+import time
 
 # 3rd party
 from docker import Client
@@ -68,6 +69,9 @@ class DockerUtil():
         else:
             self.settings = DockerUtil.DEFAULT_SETTINGS
 
+        # At first run we'll just collect the events from the latest 60 secs
+        self._latest_event_collection_ts = int(time.time()) - 60
+
         # Try to detect if we are on ECS
         self._is_ecs = False
         try:
@@ -81,12 +85,14 @@ class DockerUtil():
     def is_ecs(self):
         return self._is_ecs
 
-    def get_events(self, since, until):
+    def get_events(self):
         self.events = []
         should_reload_conf = False
+        now = int(time.time())
 
-        event_generator = self.client.events(since=since,
-                                             until=until, decode=True)
+        event_generator = self.client.events(since=self._latest_event_collection_ts,
+                                             until=now, decode=True)
+        self._latest_event_collection_ts = now
         for event in event_generator:
             if event != '':
                 self.events.append(event)

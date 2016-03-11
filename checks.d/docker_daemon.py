@@ -2,7 +2,6 @@
 import os
 import re
 import requests
-import time
 import socket
 import urllib2
 from collections import defaultdict, Counter, deque
@@ -151,9 +150,6 @@ class DockerDaemon(AgentCheck):
             self._filtered_containers = set()
             self._disable_net_metrics = False
 
-            # At first run we'll just collect the events from the latest 60 secs
-            self._last_event_collection_ts = int(time.time()) - 60
-
             # Set tagging options
             self.custom_tags = instance.get("tags", [])
             self.collect_labels_as_tags = instance.get("collect_labels_as_tags", [])
@@ -166,7 +162,6 @@ class DockerDaemon(AgentCheck):
                 CONTAINER: instance.get("container_tags", DEFAULT_CONTAINER_TAGS),
                 PERFORMANCE: performance_tags,
                 IMAGE: instance.get('image_tags', DEFAULT_IMAGE_TAGS)
-
             }
 
             # Set filtering settings
@@ -567,9 +562,7 @@ class DockerDaemon(AgentCheck):
 
     def _get_events(self):
         """Get the list of events."""
-        now = int(time.time())
-        events, should_reload_conf = self.docker_util.get_events(self._last_event_collection_ts, now)
-        self._last_event_collection_ts = now
+        events, should_reload_conf = self.docker_util.get_events()
         if should_reload_conf and self._service_discovery:
             self.agentConfig['reload_check_configs'] = True
         return events
