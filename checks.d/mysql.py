@@ -808,7 +808,9 @@ class MySql(AgentCheck):
         # table. Later is choosen because that involves no string parsing.
         with closing(db.cursor()) as cursor:
             cursor.execute(
-                "select engine from information_schema.ENGINES where engine='InnoDB'")
+                "select engine from information_schema.ENGINES where engine='InnoDB' and \
+                support not like 'no' and support not like 'disabled'"
+            )
 
             return_val = True if cursor.rowcount > 0 else False
 
