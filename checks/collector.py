@@ -753,7 +753,7 @@ class Collector(object):
             pass
 
         metadata["hostname"] = self.hostname
-        metadata["timezones"] = time.tzname
+        metadata["timezones"] = tzname_check(time.tzname)
 
         # Add cloud provider aliases
         host_aliases = GCE.get_host_aliases(self.agentConfig)
@@ -773,3 +773,12 @@ class Collector(object):
             return True
 
         return False
+
+def tzname_check(tzname):
+    """ Returns the tzname given, and deals with Japanses encoding issue
+    """
+    if tzname[0] == '\x93\x8c\x8b\x9e (\x95W\x8f\x80\x8e\x9e)':
+        log.debug('tzname from TOKYO detected and converted')
+        return ('JST', 'JST')
+    else:
+        return tzname
