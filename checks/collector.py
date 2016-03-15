@@ -775,7 +775,7 @@ class Collector(object):
         return False
 
 def tzname_check(tzname):
-    """ Returns the tzname given, and deals with Japanses encoding issue
+    """ Returns the tzname given, and deals with Japanese encoding issue
     """
     if tzname[0] == '\x93\x8c\x8b\x9e (\x95W\x8f\x80\x8e\x9e)':
         log.debug('tzname from TOKYO detected and converted')
