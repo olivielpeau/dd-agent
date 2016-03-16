@@ -294,7 +294,7 @@ class SQLServer(AgentCheck):
                 self.log.warning("Could not fetch metric %s: %s" % (metric.datadog_name, e))
 
         self.close_cursor(cursor)
-        self.close_db_connections()
+        self.close_db_connections(instance)
 
     def close_cursor(self, cursor):
         """
