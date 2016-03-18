@@ -13,7 +13,6 @@ import optparse
 import os
 import select
 import signal
-import socket
 import sys
 import threading
 from time import sleep, time
@@ -26,6 +25,7 @@ os.umask(022)
 # 3rd party
 import requests
 import simplejson as json
+import paho.mqtt.client as mqtt
 
 # project
 from aggregator import get_formatter, MetricsBucketAggregator
@@ -52,7 +52,6 @@ DOGSTATSD_AGGREGATOR_BUCKET_SIZE = 10
 
 
 WATCHDOG_TIMEOUT = 120
-UDP_SOCKET_TIMEOUT = 5
 # Since we call flush more often than the metrics aggregation interval, we should
 #  log a bunch of flushes in a row every so often.
 FLUSH_LOGGING_PERIOD = 70
@@ -284,84 +283,31 @@ class Server(object):
     A statsd udp server.
     """
 
-    def __init__(self, metrics_aggregator, host, port, forward_to_host=None, forward_to_port=None, read_from_pipe=None):
-        self.host = host
-        self.port = int(port)
-        self.address = (self.host, self.port)
+    def __init__(self, metrics_aggregator, broker, topic):
         self.metrics_aggregator = metrics_aggregator
-        self.buffer_size = 1024 * 8
-        self.read_from_pipe = read_from_pipe
-
+        self.broker = broker
+        self.topic = topic
+        self.client = mqtt.Client()
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
         self.running = False
 
-        self.should_forward = forward_to_host is not None
+    def on_connect(self, client, userdata, flags, rc):
+        log.info("Connected to MQTT broker: {0}".format(self.broker))
+        client.subscribe(self.topic)
 
-        self.forward_udp_sock = None
-        # In case we want to forward every packet received to another statsd server
-        if self.should_forward:
-            if forward_to_port is None:
-                forward_to_port = 8125
-
-            log.info("External statsd forwarding enabled. All packets received will be forwarded to %s:%s" % (forward_to_host, forward_to_port))
-            try:
-                self.forward_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self.forward_udp_sock.connect((forward_to_host, forward_to_port))
-            except Exception:
-                log.exception("Error while setting up connection to external statsd server")
+    def on_message(self, client, userdata, msg):
+        message = unicode(msg.payload)
+        self.metrics_aggregator.submit_packets(message)
 
     def start(self):
         """ Run the server. """
-        if self.read_from_pipe:
-            rp = open(self.read_from_pipe, 'r')
-            # Inline variables for quick look-up.
-            buffer_size = self.buffer_size
-            aggregator_submit = self.metrics_aggregator.submit_packets
-            sock = [rp]
-            socket_recv = rp.read
-            select_select = select.select
-            select_error = select.error
-            timeout = 1.
-            should_forward = self.should_forward
-            forward_udp_sock = self.forward_udp_sock
-
-        else:
-            # Bind to the UDP socket.
-            # IPv4 only
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.socket.setblocking(0)
-            try:
-                self.socket.bind(self.address)
-            except socket.gaierror:
-                if self.address[0] == 'localhost':
-                    log.warning("Warning localhost seems undefined in your host file, using 127.0.0.1 instead")
-                    self.address = ('127.0.0.1', self.address[1])
-                    self.socket.bind(self.address)
-
-            log.info('Listening on host & port: %s' % str(self.address))
-
-            # Inline variables for quick look-up.
-            buffer_size = self.buffer_size
-            aggregator_submit = self.metrics_aggregator.submit_packets
-            sock = [self.socket]
-            socket_recv = self.socket.recv
-            select_select = select.select
-            select_error = select.error
-            timeout = UDP_SOCKET_TIMEOUT
-            should_forward = self.should_forward
-            forward_udp_sock = self.forward_udp_sock
-
-        # Run our select loop.
+        self.client.connect(self.broker)
         self.running = True
         while self.running:
             try:
-                ready = select_select(sock, [], [], timeout)
-                if ready[0]:
-                    message = socket_recv(buffer_size)
-                    aggregator_submit(message)
-
-                    if should_forward:
-                        forward_udp_sock.send(message)
-            except select_error, se:
+                self.client.loop_start()
+            except select.error, se:
                 # Ignore interrupted system calls from sigterm.
                 errno = se[0]
                 if errno != 4:
@@ -419,29 +365,16 @@ class Dogstatsd(Daemon):
         return DogstatsdStatus.print_latest_status()
 
 
-def init(config_path=None, use_watchdog=False, use_forwarder=False, args=None, read_from_pipe=None):
+def init(config_path=None, use_watchdog=False, use_forwarder=False, broker=None, topic=None):
     """Configure the server and the reporting thread.
     """
     c = get_config(parse_args=False, cfg_path=config_path)
 
-    if (not c['use_dogstatsd'] and
-            (args and args[0] in ['start', 'restart'] or not args)):
-        log.info("Dogstatsd is disabled. Exiting")
-        # We're exiting purposefully, so exit with zero (supervisor's expected
-        # code). HACK: Sleep a little bit so supervisor thinks we've started cleanly
-        # and thus can exit cleanly.
-        sleep(4)
-        sys.exit(0)
-
     log.debug("Configuring dogstatsd")
 
-    port = c['dogstatsd_port']
     interval = DOGSTATSD_FLUSH_INTERVAL
     api_key = c['api_key']
     aggregator_interval = DOGSTATSD_AGGREGATOR_BUCKET_SIZE
-    non_local_traffic = c['non_local_traffic']
-    forward_to_host = c.get('statsd_forward_host')
-    forward_to_port = c.get('statsd_forward_port')
     event_chunk_size = c.get('event_chunk_size')
     recent_point_threshold = c.get('recent_point_threshold', None)
 
@@ -467,15 +400,7 @@ def init(config_path=None, use_watchdog=False, use_forwarder=False, args=None, r
 
     # Start the reporting thread.
     reporter = Reporter(interval, aggregator, target, api_key, use_watchdog, event_chunk_size)
-
-    # Start the server on an IPv4 stack
-    # Default to loopback
-    server_host = c['bind_host']
-    # If specified, bind to all addressses
-    if non_local_traffic:
-        server_host = ''
-
-    server = Server(aggregator, server_host, port, forward_to_host=forward_to_host, forward_to_port=forward_to_port, read_from_pipe=read_from_pipe)
+    server = Server(aggregator, broker, topic)
 
     return reporter, server, c
 
@@ -496,13 +421,14 @@ def main(config_path=None):
     parser = optparse.OptionParser("%prog [start|stop|restart|status]")
     parser.add_option('-u', '--use-local-forwarder', action='store_true',
                       dest="use_forwarder", default=False)
-    parser.add_option('-p', '--read-from-pipe', action="store", type="string",
-                      dest="read_from_pipe", default=None)
-
+    parser.add_option('-b', '--broker', action='store',
+                      dest="broker", default="test.mosquitto.org")
+    parser.add_option('-t', '--topic', action='store_true',
+                      dest="topic", default="testing-olivier")
     opts, args = parser.parse_args()
 
     if not args or args[0] in COMMANDS_START_DOGSTATSD:
-        reporter, server, cnf = init(config_path, use_watchdog=True, use_forwarder=opts.use_forwarder, args=args, read_from_pipe=opts.read_from_pipe)
+        reporter, server, cnf = init(config_path, use_watchdog=True, use_forwarder=opts.use_forwarder, broker=opts.broker, topic=opts.topic)
         daemon = Dogstatsd(PidFile(PID_NAME, PID_DIR).get_path(), server, reporter,
                            cnf.get('autorestart', False))
 
