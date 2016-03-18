@@ -423,7 +423,7 @@ def main(config_path=None):
                       dest="use_forwarder", default=False)
     parser.add_option('-b', '--broker', action='store',
                       dest="broker", default="test.mosquitto.org")
-    parser.add_option('-t', '--topic', action='store_true',
+    parser.add_option('-t', '--topic', action='store',
                       dest="topic", default="testing-olivier")
     opts, args = parser.parse_args()
 
