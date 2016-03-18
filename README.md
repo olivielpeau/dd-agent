@@ -1,6 +1,12 @@
-Use alongside an existing install of the agent (to have a conf file + no trouble with deps):
+Install:
 
 ```
-/opt/datadog-agent/embedded/bin/pip install -r requirements.txt
-/opt/datadog-agent/embedded/bin/python dogstatsd --broker="test.mosquitto.org" --topic="testing-dogstatsd"
+bash -c "$(curl -L https://raw.githubusercontent.com/olivielpeau/dd-agent/olivielpeau/mqtt/packaging/datadog-agent/source/setup_agent.sh)"
+```
+
+Use:
+
+```
+cd ~/.datadog-agent/dogstatsd/agent
+../venv/bin/python dogstatsd --broker="test.mosquitto.org" --topic="testing-dogstatsd"
 ```
