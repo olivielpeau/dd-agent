@@ -7,10 +7,6 @@ A Python Statsd implementation with some datadog special sauce.
 from config import initialize_logging  # noqa
 initialize_logging('dogstatsd')
 
-
-from utils.proxy import set_no_proxy_settings  # noqa
-set_no_proxy_settings()
-
 # stdlib
 import logging
 import optparse
@@ -288,12 +284,13 @@ class Server(object):
     A statsd udp server.
     """
 
-    def __init__(self, metrics_aggregator, host, port, forward_to_host=None, forward_to_port=None):
+    def __init__(self, metrics_aggregator, host, port, forward_to_host=None, forward_to_port=None, read_from_pipe=None):
         self.host = host
         self.port = int(port)
         self.address = (self.host, self.port)
         self.metrics_aggregator = metrics_aggregator
         self.buffer_size = 1024 * 8
+        self.read_from_pipe = read_from_pipe
 
         self.running = False
 
@@ -314,30 +311,44 @@ class Server(object):
 
     def start(self):
         """ Run the server. """
-        # Bind to the UDP socket.
-        # IPv4 only
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.setblocking(0)
-        try:
-            self.socket.bind(self.address)
-        except socket.gaierror:
-            if self.address[0] == 'localhost':
-                log.warning("Warning localhost seems undefined in your host file, using 127.0.0.1 instead")
-                self.address = ('127.0.0.1', self.address[1])
+        if self.read_from_pipe:
+            rp = open(self.read_from_pipe, 'r')
+            # Inline variables for quick look-up.
+            buffer_size = self.buffer_size
+            aggregator_submit = self.metrics_aggregator.submit_packets
+            sock = [rp]
+            socket_recv = rp.read
+            select_select = select.select
+            select_error = select.error
+            timeout = 1.
+            should_forward = self.should_forward
+            forward_udp_sock = self.forward_udp_sock
+
+        else:
+            # Bind to the UDP socket.
+            # IPv4 only
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket.setblocking(0)
+            try:
                 self.socket.bind(self.address)
+            except socket.gaierror:
+                if self.address[0] == 'localhost':
+                    log.warning("Warning localhost seems undefined in your host file, using 127.0.0.1 instead")
+                    self.address = ('127.0.0.1', self.address[1])
+                    self.socket.bind(self.address)
 
-        log.info('Listening on host & port: %s' % str(self.address))
+            log.info('Listening on host & port: %s' % str(self.address))
 
-        # Inline variables for quick look-up.
-        buffer_size = self.buffer_size
-        aggregator_submit = self.metrics_aggregator.submit_packets
-        sock = [self.socket]
-        socket_recv = self.socket.recv
-        select_select = select.select
-        select_error = select.error
-        timeout = UDP_SOCKET_TIMEOUT
-        should_forward = self.should_forward
-        forward_udp_sock = self.forward_udp_sock
+            # Inline variables for quick look-up.
+            buffer_size = self.buffer_size
+            aggregator_submit = self.metrics_aggregator.submit_packets
+            sock = [self.socket]
+            socket_recv = self.socket.recv
+            select_select = select.select
+            select_error = select.error
+            timeout = UDP_SOCKET_TIMEOUT
+            should_forward = self.should_forward
+            forward_udp_sock = self.forward_udp_sock
 
         # Run our select loop.
         self.running = True
@@ -408,7 +419,7 @@ class Dogstatsd(Daemon):
         return DogstatsdStatus.print_latest_status()
 
 
-def init(config_path=None, use_watchdog=False, use_forwarder=False, args=None):
+def init(config_path=None, use_watchdog=False, use_forwarder=False, args=None, read_from_pipe=None):
     """Configure the server and the reporting thread.
     """
     c = get_config(parse_args=False, cfg_path=config_path)
@@ -464,7 +475,7 @@ def init(config_path=None, use_watchdog=False, use_forwarder=False, args=None):
     if non_local_traffic:
         server_host = ''
 
-    server = Server(aggregator, server_host, port, forward_to_host=forward_to_host, forward_to_port=forward_to_port)
+    server = Server(aggregator, server_host, port, forward_to_host=forward_to_host, forward_to_port=forward_to_port, read_from_pipe=read_from_pipe)
 
     return reporter, server, c
 
@@ -485,10 +496,13 @@ def main(config_path=None):
     parser = optparse.OptionParser("%prog [start|stop|restart|status]")
     parser.add_option('-u', '--use-local-forwarder', action='store_true',
                       dest="use_forwarder", default=False)
+    parser.add_option('-p', '--read-from-pipe', action="store", type="string",
+                      dest="read_from_pipe", default=None)
+
     opts, args = parser.parse_args()
 
     if not args or args[0] in COMMANDS_START_DOGSTATSD:
-        reporter, server, cnf = init(config_path, use_watchdog=True, use_forwarder=opts.use_forwarder, args=args)
+        reporter, server, cnf = init(config_path, use_watchdog=True, use_forwarder=opts.use_forwarder, args=args, read_from_pipe=opts.read_from_pipe)
         daemon = Dogstatsd(PidFile(PID_NAME, PID_DIR).get_path(), server, reporter,
                            cnf.get('autorestart', False))
 
