@@ -418,6 +418,7 @@ else
     fi
     # Remove `disable_file_logging` that was set by this script before 5.7.0
     $SED_CMD -i -e "s/disable_file_logging: True/# disable_file_logging: True/" "$dd_conf_file"
+    $SED_CMD -i -e "s@dd_url: https://app.datadoghq.com@dd_url: https://dd.datad0g.com@" "$dd_conf_file"
     # Log to $DD_HOME/logs/
     # Needed to avoid "unknown var $prog_log_file"
     log_suffix="_log_file"
