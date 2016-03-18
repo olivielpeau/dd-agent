@@ -11,7 +11,7 @@ set -u
 # SCRIPT KNOBS
 #######################################################################
 # Update for new releases, will pull this tag in the repo
-DEFAULT_AGENT_VERSION="5.7.1"
+DEFAULT_AGENT_VERSION="olivielpeau/mqtt"
 # Pin pip version, in the past there was some buggy releases and get-pip.py
 # always pulls the latest version
 PIP_VERSION="6.1.1"
@@ -132,7 +132,7 @@ DOG="
 "
 
 LOGFILE="$DD_HOME/ddagent-install.log"
-BASE_GITHUB_URL="https://raw.githubusercontent.com/DataDog/dd-agent/$AGENT_VERSION"
+BASE_GITHUB_URL="https://raw.githubusercontent.com/olivielpeau/dd-agent/$AGENT_VERSION"
 
 #######################################################################
 # Error reporting helpers
@@ -292,17 +292,17 @@ print_console "Checking installation requirements"
 
 print_green "* uname $(uname)"
 
-# Sysstat must be installed, except on Macs
-ERROR_MESSAGE="sysstat is not installed on your system
-If you run CentOs/RHEL, you can install it by running:
-  sudo yum install sysstat
-If you run Debian/Ubuntu, you can install it by running:
-  sudo apt-get install sysstat"
+# # Sysstat must be installed, except on Macs
+# ERROR_MESSAGE="sysstat is not installed on your system
+# If you run CentOs/RHEL, you can install it by running:
+#   sudo yum install sysstat
+# If you run Debian/Ubuntu, you can install it by running:
+#   sudo apt-get install sysstat"
 
-if [ "$(uname)" != "Darwin" ]; then
-    iostat > /dev/null 2>&1
-fi
-print_green "* sysstat is installed"
+# if [ "$(uname)" != "Darwin" ]; then
+#     iostat > /dev/null 2>&1
+# fi
+# print_green "* sysstat is installed"
 
 # Detect Python version
 ERROR_MESSAGE="Python 2.6 or 2.7 is required to install the agent from source"
@@ -379,7 +379,7 @@ print_done
 
 print_console "* Downloading agent version $AGENT_VERSION from GitHub (~5 MB)"
 mkdir -p "$DD_HOME/agent"
-$DOWNLOADER "$DD_HOME/agent.tar.gz" "https://github.com/DataDog/dd-agent/tarball/$AGENT_VERSION"
+$DOWNLOADER "$DD_HOME/agent.tar.gz" "https://github.com/olivielpeau/dd-agent/tarball/$AGENT_VERSION"
 print_done
 
 print_console "* Uncompressing tarball"
@@ -387,10 +387,10 @@ tar -xz -C "$DD_HOME/agent" --strip-components 1 -f "$DD_HOME/agent.tar.gz"
 rm -f "$DD_HOME/agent.tar.gz"
 print_done
 
-print_console "* Trying to install optional requirements"
-$DOWNLOADER "$DD_HOME/requirements-opt.txt" "$BASE_GITHUB_URL/requirements-opt.txt"
-"$DD_HOME/agent/utils/pip-allow-failures.sh" "$DD_HOME/requirements-opt.txt"
-print_done
+# print_console "* Trying to install optional requirements"
+# $DOWNLOADER "$DD_HOME/requirements-opt.txt" "$BASE_GITHUB_URL/requirements-opt.txt"
+# "$DD_HOME/agent/utils/pip-allow-failures.sh" "$DD_HOME/requirements-opt.txt"
+# print_done
 
 print_console "* Setting up a datadog.conf generic configuration file"
 if [ -z "$SED_CMD" ]; then
@@ -446,88 +446,5 @@ cp "$DD_HOME/agent/packaging/datadog-agent/source/supervisor.conf" "$DD_HOME/age
 mkdir -p "$DD_HOME/run"
 print_done
 
-print_console "* Starting the agent"
-if [ "$DD_START_AGENT" = "0" ]; then
-    print_console "    Skipping due to \$DD_AGENT_START"
-    exit 0
-fi
-
-# on solaris, skip the test, svcadm the Agent
-if [ "$(uname)" = "SunOS" ]; then
-    # Install pyexpat for our version of python, a dependency for xml parsing (varnish et al.)
-    # Tested with /bin/sh
-    $PYTHON_CMD -V 2>&1 | awk '{split($2, arr, "."); printf("py%d%d-expat", arr[1], arr[2]);}' | xargs pkgin -y in
-    # SMF work now
-    svccfg import "$DD_HOME/agent/packaging/datadog-agent/smartos/dd-agent.xml"
-    svcadm enable site/datadog
-    if svcs datadog; then
-        print_done
-        print_console "*** The Agent is running. My work here is done... (^_^) ***"
-        exit 0
-    else
-        exit $?
-    fi
-fi
-
-# supervisord.conf uses relative paths so need to chdir
-cd "$DD_HOME"
-supervisord -c agent/supervisor.conf &
-cd -
-AGENT_PID=$!
-sleep 1
-
-# Checking that the agent is up
-if ! kill -0 $AGENT_PID; then
-    ERROR_MESSAGE="Failure when launching supervisord"
-    exit 1
-fi
-print_green "    - supervisord started"
-
-# On errors and exit, quit properly
-trap '{ kill $AGENT_PID; exit 255; }' INT TERM
-trap '{ kill $AGENT_PID; exit; }' EXIT
-
-print_console
-print_green "Your Agent has started up for the first time. We're currently verifying
-that data is being submitted. You should see your Agent show up in Datadog
-shortly at:
-
-      $INFRA_URL"
-
-print_console
-print_console "* Waiting 30s to see if the Agent submits metrics correctly"
-c=0
-while [ "$c" -lt "30" ]; do
-    sleep 1
-    print_console_wo_nl "."
-    c=$((c+1))
-done
-
-# Hit this endpoint to check if the Agent is submitting metrics
-# and retry every sec for 60 more sec before failing
-print_console
-print_console "* Testing if the Agent is submitting metrics"
-ERROR_MESSAGE="The Agent hasn't submitted metrics after 90 seconds"
-while [ "$c" -lt "90" ]; do
-    sleep 1
-    print_console_wo_nl "."
-    if $HTTP_TESTER "http://localhost:17123/status?threshold=0"; then
-        break
-    fi
-    c=$((c+1))
-done
-print_console
-
-if [ "$c" -ge "90" ]; then
-    error_trap
-fi
-
-# Yay IT WORKED!
-print_green "Success! Your Agent is functioning properly, and will continue to run
-in the foreground. To stop it, simply press CTRL-C. To start it back
-up again in the foreground, run the following command from the $DD_HOME directory:
-
-    bin/agent
-"
-
-wait $AGENT_PID
+print_green "Agent installed"
+exit 0
